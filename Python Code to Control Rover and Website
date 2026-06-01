@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robot Control</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background: #0a0e14;
+    color: #c8d6e5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+
+  h1 {
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #4fc3f7;
+    margin-bottom: 4px;
+  }
+
+  .build {
+    font-size: 11px;
+    color: #4a5568;
+    letter-spacing: 0.15em;
+    margin-bottom: 28px;
+  }
+
+  /* ── Status Bar ── */
+  .status-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .stat {
+    background: #111827;
+    border: 1px solid #1e2d3d;
+    border-radius: 6px;
+    padding: 10px 18px;
+    text-align: center;
+    min-width: 110px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #4a5568;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #4fc3f7;
+  }
+
+  .stat-value.danger { color: #f87171; }
+  .stat-value.ok     { color: #34d399; }
+  .stat-value.warn   { color: #fbbf24; }
+
+  /* ── Mode Buttons ── */
+  .mode-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .mode-btn {
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: #111827;
+    color: #8899aa;
+    border: 1px solid #1e2d3d;
+    border-radius: 4px;
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .mode-btn:hover { border-color: #4fc3f7; color: #4fc3f7; }
+
+  .mode-btn.active-auto {
+    background: #0c2a3a;
+    border-color: #4fc3f7;
+    color: #4fc3f7;
+    box-shadow: 0 0 8px #4fc3f744;
+  }
+
+  .mode-btn.active-manual {
+    background: #1a2a0c;
+    border-color: #34d399;
+    color: #34d399;
+    box-shadow: 0 0 8px #34d39944;
+  }
+
+  .mode-btn.active-stopped {
+    background: #2a0c0c;
+    border-color: #f87171;
+    color: #f87171;
+    box-shadow: 0 0 8px #f8717144;
+  }
+
+  /* ── D-Pad ── */
+  .dpad-wrapper {
+    display: grid;
+    grid-template-columns: repeat(3, 64px);
+    grid-template-rows: repeat(3, 64px);
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+
+  .dpad-btn {
+    font-family: inherit;
+    font-size: 20px;
+    background: #111827;
+    color: #4a5568;
+    border: 1px solid #1e2d3d;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .dpad-btn:hover:not(:disabled) { border-color: #4fc3f7; color: #4fc3f7; }
+
+  .dpad-btn:active:not(:disabled), .dpad-btn.pressed {
+    background: #0c2a3a;
+    border-color: #4fc3f7;
+    color: #4fc3f7;
+    transform: scale(0.93);
+    box-shadow: 0 0 10px #4fc3f744;
+  }
+
+  .dpad-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+  .dpad-btn.stop-btn {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .dpad-btn.stop-btn:active, .dpad-btn.stop-btn.pressed {
+    background: #2a0c0c;
+    border-color: #f87171;
+    color: #f87171;
+    box-shadow: 0 0 10px #f8717144;
+  }
+
+  /* ── Sonar ── */
+  .sonar {
+    width: 180px;
+    height: 100px;
+    margin-bottom: 24px;
+  }
+
+  /* ── Log ── */
+  .log-box {
+    width: 100%;
+    max-width: 420px;
+    background: #111827;
+    border: 1px solid #1e2d3d;
+    border-radius: 6px;
+    padding: 10px 14px;
+    height: 100px;
+    overflow-y: auto;
+    font-size: 11px;
+    color: #4a5568;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .log-entry { color: #8899aa; }
+  .log-entry.warn { color: #fbbf24; }
+  .log-entry.error { color: #f87171; }
+  .log-entry.ok { color: #34d399; }
+
+  .keyboard-hint {
+    margin-top: 16px;
+    font-size: 10px;
+    color: #2d3748;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Robot Control Terminal</h1>
+<div class="build">v2.0 — obstacle avoidance + remote drive</div>
+
+<!-- Status -->
+<div class="status-bar">
+  <div class="stat">
+    <div class="stat-label">Mode</div>
+    <div class="stat-value" id="s-mode">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Distance</div>
+    <div class="stat-value" id="s-dist">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Obstacle</div>
+    <div class="stat-value" id="s-obs">—</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Command</div>
+    <div class="stat-value" id="s-cmd" style="font-size:13px; margin-top:4px;">—</div>
+  </div>
+</div>
+
+<!-- Mode buttons -->
+<div class="mode-row">
+  <button class="mode-btn" id="btn-auto"    onclick="setMode('auto')">Auto</button>
+  <button class="mode-btn" id="btn-manual"  onclick="setMode('manual')">Manual</button>
+  <button class="mode-btn" id="btn-stopped" onclick="setMode('stopped')">Stop</button>
+</div>
+
+<!-- Sonar sweep SVG -->
+<svg class="sonar" viewBox="0 0 180 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="sg" cx="50%" cy="100%" r="100%">
+      <stop offset="0%"   stop-color="#0d7b3e" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#0d7b3e" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="sc"><rect x="0" y="0" width="180" height="100"/></clipPath>
+  </defs>
+  <!-- Arcs -->
+  <path d="M 90 100 m -20 0 a 20 20 0 0 1 40 0"   fill="none" stroke="#1a3a2a" stroke-width="0.5"/>
+  <path d="M 90 100 m -50 0 a 50 50 0 0 1 100 0"  fill="none" stroke="#1a3a2a" stroke-width="0.5"/>
+  <path d="M 90 100 m -80 0 a 80 80 0 0 1 160 0"  fill="none" stroke="#1a3a2a" stroke-width="0.5"/>
+  <!-- Cross-hairs -->
+  <line x1="90" y1="20" x2="90" y2="100" stroke="#1a3a2a" stroke-width="0.5"/>
+  <line x1="10" y1="100" x2="170" y2="100" stroke="#1a3a2a" stroke-width="0.5"/>
+  <!-- Sweep fill -->
+  <path id="sonar-fill" clip-path="url(#sc)" fill="url(#sg)" opacity="0.4" d="M90,100 L90,20 A80,80 0 0,1 90,20 Z"/>
+  <!-- Sweep line -->
+  <line id="sonar-line" x1="90" y1="100" x2="90" y2="20" stroke="#34d399" stroke-width="1.5" opacity="0.8"/>
+  <!-- Obstacle blob -->
+  <circle id="sonar-dot" cx="90" cy="100" r="5" fill="#f87171" opacity="0"/>
+  <!-- Label -->
+  <text x="90" y="10" text-anchor="middle" fill="#1a4a3a" font-size="8" font-family="Courier New">SONAR</text>
+</svg>
+
+<div style="text-align:center; margin-bottom: 20px;">
+    <img src="{{ url_for('video_feed') }}" style="width: 100%; max-width: 480px; border: 4px solid #2ecc71; border-radius: 15px; box-shadow: 0 0 20px rgba(46, 204, 113, 0.4);">
+</div>
+
+<!-- D-Pad -->
+<div class="dpad-wrapper">
+  <!-- Row 1 -->
+  <button class="dpad-btn" id="d-fl" onclick="cmd('forward_left')"  title="Forward-Left">↖</button>
+  <button class="dpad-btn" id="d-f"  onclick="cmd('forward')"       title="Forward">▲</button>
+  <button class="dpad-btn" id="d-fr" onclick="cmd('forward_right')" title="Forward-Right">↗</button>
+  <!-- Row 2 -->
+  <button class="dpad-btn" id="d-l"  onclick="cmd('left')"          title="Pivot Left">◀</button>
+  <button class="dpad-btn stop-btn" id="d-s" onclick="cmd('stop')"  title="Stop">■</button>
+  <button class="dpad-btn" id="d-r"  onclick="cmd('right')"         title="Pivot Right">▶</button>
+  <!-- Row 3 -->
+  <button class="dpad-btn" id="d-bl" onclick="cmd('backward_left')" title="Backward-Left (arc turn)">↙</button>
+  <button class="dpad-btn" id="d-b"  onclick="cmd('backward')"      title="Backward">▼</button>
+  <button class="dpad-btn" id="d-br" onclick="cmd('backward_right')" title="Backward-Right (arc turn)">↘</button>
+</div>
+
+<!-- Log -->
+<div class="log-box" id="log"></div>
+<div class="keyboard-hint">WASD / arrow keys · Q E Z C = diagonals · Space = stop · A=auto · M=manual</div>
+
+<script>
+const BASE = window.location.origin;
+let currentMode = 'stopped';
+let pollTimer = null;
+
+/* ── Logging ── */
+function log(msg, cls='') {
+  const box = document.getElementById('log');
+  const el = document.createElement('div');
+  el.className = 'log-entry ' + cls;
+  el.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  if (box.children.length > 80) box.removeChild(box.firstChild);
+}
+
+/* ── Mode ── */
+async function setMode(m) {
+  try {
+    const res = await fetch(BASE + '/mode/' + m, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      currentMode = m;
+      updateModeUI(m);
+      log('Mode → ' + m, m === 'stopped' ? 'error' : m === 'auto' ? 'warn' : 'ok');
+      setDpadEnabled(m === 'manual');
+    }
+  } catch(e) { log('Mode error: ' + e.message, 'error'); }
+}
+
+function updateModeUI(m) {
+  ['auto','manual','stopped'].forEach(x => {
+    const b = document.getElementById('btn-'+x);
+    b.className = 'mode-btn' + (x === m ? ' active-'+x : '');
+  });
+  document.getElementById('s-mode').textContent = m.toUpperCase();
+  document.getElementById('s-mode').className = 'stat-value ' +
+    (m==='auto'?'warn': m==='manual'?'ok':'danger');
+}
+
+function setDpadEnabled(on) {
+  document.querySelectorAll('.dpad-btn').forEach(b => b.disabled = !on);
+}
+
+/* ── Commands ── */
+async function cmd(c) {
+  if (currentMode !== 'manual') return;
+  try {
+    const res = await fetch(BASE + '/command/' + c, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('s-cmd').textContent = c.replace('_', ' ');
+    }
+  } catch(e) { log('Cmd error: ' + e.message, 'error'); }
+}
+
+/* ── Status poll ── */
+async function pollStatus() {
+  try {
+    const res = await fetch(BASE + '/status');
+    const d = await res.json();
+
+    const dist = d.distance != null ? d.distance + ' cm' : 'N/A';
+    const distEl = document.getElementById('s-dist');
+    distEl.textContent = dist;
+    distEl.className = 'stat-value' + (d.obstacle ? ' danger' : (d.distance != null && d.distance < 40 ? ' warn' : ' ok'));
+
+    const obsEl = document.getElementById('s-obs');
+    obsEl.textContent = d.obstacle ? 'YES' : 'CLEAR';
+    obsEl.className = 'stat-value ' + (d.obstacle ? 'danger' : 'ok');
+
+    if (d.mode !== currentMode) {
+      currentMode = d.mode;
+      updateModeUI(d.mode);
+      setDpadEnabled(d.mode === 'manual');
+    }
+
+    updateSonar(d.distance, d.obstacle);
+  } catch(e) {
+    // server unreachable
+  }
+}
+
+/* ── Sonar animation ── */
+let angle = -90; // degrees from top (0 = top)
+let sweepDir = 1;
+
+function updateSonar(distCm, obstacle) {
+  const cx = 90, cy = 100, maxR = 80;
+  angle += sweepDir * 3;
+  if (angle >= 0 || angle <= -180) sweepDir *= -1;
+
+  const rad = (angle * Math.PI) / 180;
+  const lx = cx + maxR * Math.sin(rad + Math.PI/2);
+  const ly = cy - maxR * Math.cos(rad + Math.PI/2);
+
+  document.getElementById('sonar-line').setAttribute('x2', lx);
+  document.getElementById('sonar-line').setAttribute('y2', ly);
+
+  // fan fill from center to sweep line
+  const sweep = `M${cx},${cy} L${cx},${cy - maxR} A${maxR},${maxR} 0 0,1 ${lx},${ly} Z`;
+  document.getElementById('sonar-fill').setAttribute('d', sweep);
+
+  // obstacle dot
+  const dot = document.getElementById('sonar-dot');
+  if (obstacle && distCm != null) {
+    const r = Math.min((distCm / 400) * maxR, maxR);
+    const dx = cx + r * Math.sin(rad + Math.PI/2);
+    const dy = cy - r * Math.cos(rad + Math.PI/2);
+    dot.setAttribute('cx', dx);
+    dot.setAttribute('cy', dy);
+    dot.setAttribute('opacity', '1');
+  } else {
+    dot.setAttribute('opacity', '0');
+  }
+}
+
+setInterval(updateSonar.bind(null, null, false), 50);
+setInterval(pollStatus, 500);
+
+/* ── Keyboard ── */
+const keyMap = {
+  'ArrowUp':    'forward',  'w': 'forward',
+  'ArrowDown':  'backward', 's': 'backward',
+  'ArrowLeft':  'left',     'a': 'left',
+  'ArrowRight': 'right',    'd': 'right',
+  'q': 'forward_left',  'e': 'forward_right',
+  'z': 'backward_left', 'c': 'backward_right',
+  ' ': 'stop',
+};
+
+const dpadIds = {
+  'forward':'d-f','backward':'d-b','left':'d-l','right':'d-r',
+  'forward_left':'d-fl','forward_right':'d-fr',
+  'backward_left':'d-bl','backward_right':'d-br','stop':'d-s'
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'm') { setMode('manual'); return; }
+  if (e.key === 'A') { setMode('auto');   return; }
+  const c = keyMap[e.key];
+  if (c && currentMode === 'manual') {
+    e.preventDefault();
+    cmd(c);
+    const id = dpadIds[c];
+    if (id) {
+      const b = document.getElementById(id);
+      b.classList.add('pressed');
+      setTimeout(() => b.classList.remove('pressed'), 150);
+    }
+  }
+});
+
+/* ── Init ── */
+setDpadEnabled(false);
+updateModeUI('stopped');
+log('Connected to ' + BASE, 'ok');
+log('Switch to Manual to drive, Auto for obstacle avoidance.', '');
+pollStatus();
+</script>
+</body>
+</html>
